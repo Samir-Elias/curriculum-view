@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import ".components/index.css";
+import ".index.css";
 import App from ".components/App"; // ← IMPORTANTE: App con A mayúscula
 
 // 1. Encuentra el punto de entrada en tu HTML.

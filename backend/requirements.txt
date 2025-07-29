@@ -1,0 +1,89 @@
+# Backend Requirements - Completamente Limpio
+# Sin dependencias externas no autorizadas
+
+# FastAPI y servidor
+fastapi==0.110.1
+uvicorn[standard]==0.25.0
+
+# Base de datos
+pymongo==4.5.0
+motor==3.3.1
+
+# Utilidades de configuración
+python-dotenv==1.0.1
+pydantic[email]==2.6.4
+
+# Manejo de archivos y datos
+python-multipart==0.0.9
+python-jose[cryptography]==3.3.0
+
+# Autenticación y seguridad
+passlib[bcrypt]==1.7.4
+python-jose==3.3.0
+cryptography==42.0.8
+
+# HTTP y requests
+requests==2.31.0
+httpx==0.26.0
+
+# Validación y parsing
+email-validator==2.2.0
+pydantic-settings==2.2.1
+
+# Fechas y tiempo
+python-dateutil==2.8.2
+pytz==2024.1
+
+# Logging y monitoreo
+structlog==23.2.0
+
+# Testing (desarrollo)
+pytest==8.0.0
+pytest-asyncio==0.23.5
+httpx==0.26.0
+
+# Linting y formateo (desarrollo)
+black==24.1.1
+isort==5.13.2
+flake8==7.0.0
+mypy==1.8.0
+
+# Análisis de datos (opcional)
+pandas==2.2.0
+numpy==1.26.0
+
+# CLI tools
+typer==0.9.0
+rich==13.7.0
+
+# Variables de entorno
+python-decouple==3.8
+
+# CORS
+python-cors==1.0.1
+
+# Serialización
+orjson==3.9.15
+
+# Compresión
+python-multipart==0.0.9
+
+# Validación adicional
+validators==0.22.0
+
+# Manejo de archivos
+aiofiles==23.2.1
+
+# Caching (opcional)
+redis==5.0.1
+hiredis==2.3.2
+
+# Monitoreo de performance
+prometheus-client==0.20.0
+
+# Documentación automática
+mkdocs==1.5.3
+mkdocs-material==9.5.9
+
+# Deployment
+gunicorn==21.2.0

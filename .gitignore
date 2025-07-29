@@ -1,0 +1,33 @@
+# Crear .gitignore
+echo "# Dependencias
+node_modules/
+__pycache__/
+venv/
+.venv/
+
+# Archivos de entorno
+.env
+.env.local
+.env.production
+
+# Build outputs
+build/
+dist/
+*.pyc
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+*.log
+
+# Databases
+*.db
+*.sqlite
+
+# Archivos temporales
+*.tmp
+*.temp" > .gitignore

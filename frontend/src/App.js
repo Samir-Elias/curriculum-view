@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import './App.css';
@@ -127,7 +127,7 @@ const StatsSection = ({ statusChecks }) => {
 
 // Componente de demostración cuando no hay backend
 const DemoMode = () => {
-  const [demoChecks, setDemoChecks] = useState([
+  const [demoChecks] = useState([
     {
       id: "demo-1",
       client_name: "Cliente Demo 1",
@@ -275,26 +275,7 @@ function App() {
   const [error, setError] = useState(null);
   const [hasBackend, setHasBackend] = useState(true);
 
-  // Cargar status checks al montar el componente
-  useEffect(() => {
-    checkBackendConnection();
-  }, []);
-
-  const checkBackendConnection = async () => {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/health`, { timeout: 5000 });
-      if (response.status === 200) {
-        setHasBackend(true);
-        await fetchStatusChecks();
-      }
-    } catch (err) {
-      console.warn('Backend no disponible, usando modo demo');
-      setHasBackend(false);
-      setError(null); // No mostrar error en modo demo
-    }
-  };
-
-  const fetchStatusChecks = async () => {
+  const fetchStatusChecks = useCallback(async () => {
     if (!hasBackend) return;
     
     try {
@@ -304,7 +285,26 @@ function App() {
       console.error('Error fetching status checks:', err);
       setError('Error al cargar los datos');
     }
-  };
+  }, [hasBackend]);
+
+  const checkBackendConnection = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/health`, { timeout: 5000 });
+      if (response.status === 200) {
+        setHasBackend(true);
+        await fetchStatusChecks();
+      }
+    } catch (err) {
+      console.warn('Backend no disponible, usando modo demo');
+      setHasBackend(false);
+      setError(null);
+    }
+  }, [fetchStatusChecks]);
+
+  // Cargar status checks al montar el componente
+  useEffect(() => {
+    checkBackendConnection();
+  }, [checkBackendConnection]);
 
   const createStatusCheck = async (clientName) => {
     if (!hasBackend) return;

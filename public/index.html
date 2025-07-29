@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="description" content="Proyecto completamente limpio sin marcas de agua" />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    
+    <!-- Preconnect para mejor performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <!-- Google Fonts opcional -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Meta tags para SEO -->
+    <meta property="og:title" content="Tu Proyecto Limpio" />
+    <meta property="og:description" content="Proyecto completamente limpio sin marcas de agua" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="%PUBLIC_URL%" />
+    <meta property="og:image" content="%PUBLIC_URL%/og-image.png" />
+    
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Tu Proyecto Limpio" />
+    <meta name="twitter:description" content="Proyecto completamente limpio sin marcas de agua" />
+    <meta name="twitter:image" content="%PUBLIC_URL%/og-image.png" />
+    
+    <title>Tu Proyecto Limpio</title>
+    
+    <style>
+      /* Loading screen mientras carga React */
+      #initial-loader {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, #1e3a8a 0%, #7c3aed 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        transition: opacity 0.5s ease-out;
+      }
+      
+      .loader {
+        width: 50px;
+        height: 50px;
+        border: 3px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        border-top-color: white;
+        animation: spin 1s ease-in-out infinite;
+      }
+      
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+      
+      .loader-text {
+        color: white;
+        margin-top: 20px;
+        font-family: 'Inter', sans-serif;
+        font-weight: 500;
+      }
+      
+      /* Ocultar loader cuando React esté listo */
+      .app-loaded #initial-loader {
+        opacity: 0;
+        pointer-events: none;
+      }
+      
+      /* Estilos base del body */
+      body {
+        margin: 0;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto',
+          'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans',
+          'Helvetica Neue', sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        background-color: #ffffff;
+      }
+      
+      /* Ocultar cualquier marca de agua */
+      [id*="emergent"],
+      [class*="emergent"],
+      [data-emergent],
+      .watermark,
+      .badge,
+      a[href*="emergent"] {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+      }
+    </style>
+  </head>
+  <body>
+    <noscript>
+      <div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;">
+        <h2>JavaScript Required</h2>
+        <p>Esta aplicación necesita JavaScript para funcionar correctamente.</p>
+        <p>Por favor, habilita JavaScript en tu navegador.</p>
+      </div>
+    </noscript>
+    
+    <!-- Loading screen inicial -->
+    <div id="initial-loader">
+      <div style="text-align: center;">
+        <div class="loader"></div>
+        <div class="loader-text">Cargando...</div>
+      </div>
+    </div>
+    
+    <!-- Aquí se monta React -->
+    <div id="root"></div>
+    
+    <script>
+      // Ocultar loader cuando React esté listo
+      window.addEventListener('load', function() {
+        setTimeout(function() {
+          document.body.classList.add('app-loaded');
+          setTimeout(function() {
+            const loader = document.getElementById('initial-loader');
+            if (loader) {
+              loader.remove();
+            }
+          }, 500);
+        }, 1000);
+      });
+      
+      // Manejo de errores
+      window.addEventListener('error', function(e) {
+        console.error('Error en la aplicación:', e.error);
+      });
+      
+      // Service Worker registration (opcional)
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/service-worker.js')
+            .then(function(registration) {
+              console.log('SW registered: ', registration);
+            })
+            .catch(function(registrationError) {
+              console.log('SW registration failed: ', registrationError);
+            });
+        });
+      }
+    </script>
+  </body>
+</html>

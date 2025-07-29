@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import './App.css';
 
-// Configuración de la API
+// Configuración de la API - con fallback para desarrollo
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
 
 // Componente de Hero animado
@@ -125,13 +125,66 @@ const StatsSection = ({ statusChecks }) => {
   );
 };
 
+// Componente de demostración cuando no hay backend
+const DemoMode = () => {
+  const [demoChecks, setDemoChecks] = useState([
+    {
+      id: "demo-1",
+      client_name: "Cliente Demo 1",
+      timestamp: new Date().toISOString(),
+      status: "active"
+    },
+    {
+      id: "demo-2", 
+      client_name: "Cliente Demo 2",
+      timestamp: new Date(Date.now() - 60000).toISOString(),
+      status: "active"
+    }
+  ]);
+
+  return (
+    <div className="max-w-4xl mx-auto">
+      <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-6">
+        <p>🚧 <strong>Modo Demo:</strong> No se pudo conectar con el backend. Mostrando datos de demostración.</p>
+      </div>
+      
+      <h3 className="text-2xl font-bold mb-6 text-gray-800">Demo - Status Checks</h3>
+      <div className="space-y-4">
+        {demoChecks.map((status, index) => (
+          <motion.div
+            key={status.id}
+            className="bg-white rounded-lg shadow p-4 border-l-4 border-purple-500"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.3, delay: index * 0.05 }}
+          >
+            <div className="flex justify-between items-center">
+              <div>
+                <h4 className="font-semibold text-gray-800">{status.client_name}</h4>
+                <p className="text-sm text-gray-600">
+                  {new Date(status.timestamp).toLocaleString()}
+                </p>
+              </div>
+              <div className="flex items-center">
+                <span className="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">
+                  {status.status}
+                </span>
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 // Componente de formulario
-const StatusForm = ({ onSubmit, isLoading }) => {
+const StatusForm = ({ onSubmit, isLoading, hasBackend }) => {
   const [clientName, setClientName] = useState('');
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (clientName.trim()) {
+    if (clientName.trim() && hasBackend) {
       onSubmit(clientName.trim());
       setClientName('');
     }
@@ -140,6 +193,11 @@ const StatusForm = ({ onSubmit, isLoading }) => {
   return (
     <AnimatedCard className="max-w-md mx-auto">
       <h3 className="text-2xl font-bold mb-4 text-gray-800">Crear Status Check</h3>
+      {!hasBackend && (
+        <div className="mb-4 p-3 bg-gray-100 border border-gray-300 rounded text-sm text-gray-600">
+          📝 Funcionalidad disponible cuando el backend esté conectado
+        </div>
+      )}
       <form onSubmit={handleSubmit}>
         <div className="mb-4">
           <label className="block text-gray-700 text-sm font-bold mb-2">
@@ -151,17 +209,18 @@ const StatusForm = ({ onSubmit, isLoading }) => {
             onChange={(e) => setClientName(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-purple-500 transition-colors"
             placeholder="Ingresa el nombre del cliente"
+            disabled={!hasBackend}
             required
           />
         </div>
         <motion.button
           type="submit"
-          disabled={isLoading}
-          className="w-full bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
+          disabled={isLoading || !hasBackend}
+          className="w-full bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          whileHover={hasBackend ? { scale: 1.02 } : {}}
+          whileTap={hasBackend ? { scale: 0.98 } : {}}
         >
-          {isLoading ? 'Creando...' : 'Crear Status Check'}
+          {!hasBackend ? 'Backend No Disponible' : isLoading ? 'Creando...' : 'Crear Status Check'}
         </motion.button>
       </form>
     </AnimatedCard>
@@ -214,13 +273,30 @@ function App() {
   const [statusChecks, setStatusChecks] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [hasBackend, setHasBackend] = useState(true);
 
   // Cargar status checks al montar el componente
   useEffect(() => {
-    fetchStatusChecks();
+    checkBackendConnection();
   }, []);
 
+  const checkBackendConnection = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/health`, { timeout: 5000 });
+      if (response.status === 200) {
+        setHasBackend(true);
+        await fetchStatusChecks();
+      }
+    } catch (err) {
+      console.warn('Backend no disponible, usando modo demo');
+      setHasBackend(false);
+      setError(null); // No mostrar error en modo demo
+    }
+  };
+
   const fetchStatusChecks = async () => {
+    if (!hasBackend) return;
+    
     try {
       const response = await axios.get(`${API_BASE_URL}/status`);
       setStatusChecks(response.data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
@@ -231,6 +307,8 @@ function App() {
   };
 
   const createStatusCheck = async (clientName) => {
+    if (!hasBackend) return;
+    
     setIsLoading(true);
     setError(null);
     
@@ -287,12 +365,20 @@ function App() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
             {/* Form Section */}
             <div>
-              <StatusForm onSubmit={createStatusCheck} isLoading={isLoading} />
+              <StatusForm 
+                onSubmit={createStatusCheck} 
+                isLoading={isLoading} 
+                hasBackend={hasBackend}
+              />
             </div>
             
             {/* List Section */}
             <div>
-              <StatusList statusChecks={statusChecks} />
+              {hasBackend ? (
+                <StatusList statusChecks={statusChecks} />
+              ) : (
+                <DemoMode />
+              )}
             </div>
           </div>
         </div>

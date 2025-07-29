@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
-import App from "./App"; // ← IMPORTANTE: App con A mayúscula
+import App from ".components/App"; // ← IMPORTANTE: App con A mayúscula
 
 // 1. Encuentra el punto de entrada en tu HTML.
 const root = ReactDOM.createRoot(document.getElementById("root"));

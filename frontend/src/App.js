@@ -3,8 +3,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import './App.css';
 
-// Configuración de la API - con fallback para desarrollo
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
+// Configuración de la API - CORREGIDO para soportar ambas variables
+const API_BASE_URL = process.env.REACT_APP_API_URL || 
+                     process.env.NEXT_PUBLIC_API_URL || 
+                     'http://localhost:8000/api/v1';
+
+// Debug: mostrar qué URL está usando
+console.log('🔧 API URL configurada:', API_BASE_URL);
+console.log('🔧 Variables disponibles:', {
+  REACT_APP_API_URL: process.env.REACT_APP_API_URL,
+  NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL
+});
 
 // Componente de Hero animado
 const Hero = () => {
@@ -58,6 +67,33 @@ const Hero = () => {
         </motion.div>
       </div>
     </motion.section>
+  );
+};
+
+// Componente de debug para mostrar la configuración
+const DebugInfo = () => {
+  const [showDebug, setShowDebug] = useState(false);
+  
+  return (
+    <div className="fixed bottom-4 right-4 z-50">
+      <button
+        onClick={() => setShowDebug(!showDebug)}
+        className="bg-gray-800 text-white px-3 py-2 rounded text-sm hover:bg-gray-700"
+      >
+        🔧 Debug
+      </button>
+      
+      {showDebug && (
+        <div className="absolute bottom-12 right-0 bg-white border rounded-lg shadow-lg p-4 w-80 text-sm">
+          <h4 className="font-bold mb-2">Configuración API:</h4>
+          <div className="space-y-1 text-xs font-mono">
+            <div>URL: <span className="text-blue-600">{API_BASE_URL}</span></div>
+            <div>REACT_APP_API_URL: <span className="text-green-600">{process.env.REACT_APP_API_URL || 'undefined'}</span></div>
+            <div>NEXT_PUBLIC_API_URL: <span className="text-purple-600">{process.env.NEXT_PUBLIC_API_URL || 'undefined'}</span></div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -146,6 +182,7 @@ const DemoMode = () => {
     <div className="max-w-4xl mx-auto">
       <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-6">
         <p>🚧 <strong>Modo Demo:</strong> No se pudo conectar con el backend. Mostrando datos de demostración.</p>
+        <p className="text-sm mt-1">API URL: {API_BASE_URL}</p>
       </div>
       
       <h3 className="text-2xl font-bold mb-6 text-gray-800">Demo - Status Checks</h3>
@@ -289,13 +326,15 @@ function App() {
 
   const checkBackendConnection = useCallback(async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/health`, { timeout: 5000 });
+      console.log('🔄 Probando conexión a:', `${API_BASE_URL}/health`);
+      const response = await axios.get(`${API_BASE_URL}/health`, { timeout: 10000 });
       if (response.status === 200) {
+        console.log('✅ Backend conectado exitosamente');
         setHasBackend(true);
         await fetchStatusChecks();
       }
     } catch (err) {
-      console.warn('Backend no disponible, usando modo demo');
+      console.warn('❌ Backend no disponible:', err.message);
       setHasBackend(false);
       setError(null);
     }
@@ -329,6 +368,9 @@ function App() {
 
   return (
     <div className="App min-h-screen">
+      {/* Debug Info */}
+      <DebugInfo />
+      
       {/* Hero Section */}
       <Hero />
       
@@ -471,7 +513,8 @@ function App() {
             </div>
           </motion.div>
         </div>
-      </footer>
+      </div>
+    </footer>
     </div>
   );
 }

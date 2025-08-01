@@ -513,8 +513,7 @@ function App() {
             </div>
           </motion.div>
         </div>
-      </div>
-    </footer>
+      </footer>
     </div>
   );
 }

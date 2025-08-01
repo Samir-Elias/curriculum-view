@@ -31,3 +31,4 @@ Thumbs.db
 # Archivos temporales
 *.tmp
 *.temp" > .gitignore
+.vercel

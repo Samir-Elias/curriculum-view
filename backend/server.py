@@ -1,9 +1,11 @@
+# server.py - Versión con fallback a base de datos en memoria
+
 from fastapi import FastAPI, APIRouter, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import datetime
 import os
 import uuid
@@ -19,12 +21,26 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Base de datos en memoria como fallback
+in_memory_db: Dict[str, dict] = {}
+
 # Configuración de MongoDB
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
 DB_NAME = os.getenv("DB_NAME", "clean_database")
 
-client = AsyncIOMotorClient(MONGO_URL)
-db = client[DB_NAME]
+# Intentar conectar a MongoDB
+client = None
+db = None
+use_memory_db = True
+
+try:
+    client = AsyncIOMotorClient(MONGO_URL)
+    db = client[DB_NAME]
+    use_memory_db = False
+    logger.info("MongoDB client configured - will test connection on first request")
+except Exception as e:
+    logger.warning(f"MongoDB not available, using in-memory database: {e}")
+    use_memory_db = True
 
 # Crear la aplicación FastAPI
 app = FastAPI(
@@ -39,7 +55,8 @@ app = FastAPI(
 origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "https://tu-dominio.com",  # Actualiza con tu dominio real
+    "https://payments-project.onrender.com",
+    "https://*.onrender.com",
 ]
 
 app.add_middleware(
@@ -72,6 +89,22 @@ class HealthCheck(BaseModel):
     status: str = "healthy"
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     version: str = "1.0.0"
+    database_connected: bool = False
+    database_type: str = "memory"
+
+# Función para verificar MongoDB
+async def check_mongodb():
+    global use_memory_db
+    if client and db:
+        try:
+            await client.admin.command('ping', serverSelectionTimeoutMS=5000)
+            use_memory_db = False
+            return True
+        except Exception as e:
+            logger.warning(f"MongoDB not available: {e}")
+            use_memory_db = True
+            return False
+    return False
 
 # Router de API
 api_router = APIRouter(prefix="/api/v1")
@@ -79,31 +112,46 @@ api_router = APIRouter(prefix="/api/v1")
 @api_router.get("/", response_model=HealthCheck)
 async def root():
     """Endpoint raíz con información de salud de la API"""
-    return HealthCheck()
+    db_connected = await check_mongodb()
+    db_type = "mongodb" if db_connected else "memory"
+    
+    return HealthCheck(
+        database_connected=db_connected,
+        database_type=db_type
+    )
 
 @api_router.get("/health", response_model=HealthCheck)
 async def health_check():
     """Endpoint de verificación de salud"""
-    try:
-        # Verificar conexión a MongoDB
-        await db.command("ping")
-        return HealthCheck()
-    except Exception as e:
-        logger.error(f"Error en health check: {e}")
-        raise HTTPException(status_code=503, detail="Database connection failed")
+    db_connected = await check_mongodb()
+    db_type = "mongodb" if db_connected else "memory"
+    
+    return HealthCheck(
+        database_connected=db_connected,
+        database_type=db_type
+    )
 
 @api_router.post("/status", response_model=StatusCheck)
 async def create_status_check(input: StatusCheckCreate):
     """Crear un nuevo status check"""
     try:
         status_obj = StatusCheck(**input.dict())
-        result = await db.status_checks.insert_one(status_obj.dict())
         
-        if result.inserted_id:
-            logger.info(f"Created status check for client: {input.client_name}")
-            return status_obj
-        else:
-            raise HTTPException(status_code=500, detail="Failed to create status check")
+        if not use_memory_db and db:
+            # Intentar usar MongoDB
+            try:
+                result = await db.status_checks.insert_one(status_obj.dict())
+                if result.inserted_id:
+                    logger.info(f"Created status check in MongoDB for client: {input.client_name}")
+                    return status_obj
+            except Exception as e:
+                logger.warning(f"MongoDB insert failed, using memory: {e}")
+        
+        # Usar base de datos en memoria
+        in_memory_db[status_obj.id] = status_obj.dict()
+        logger.info(f"Created status check in memory for client: {input.client_name}")
+        return status_obj
+        
     except Exception as e:
         logger.error(f"Error creating status check: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -112,8 +160,18 @@ async def create_status_check(input: StatusCheckCreate):
 async def get_status_checks(limit: int = 100, skip: int = 0):
     """Obtener lista de status checks con paginación"""
     try:
-        status_checks = await db.status_checks.find().skip(skip).limit(limit).to_list(length=limit)
-        return [StatusCheck(**check) for check in status_checks]
+        if not use_memory_db and db:
+            # Intentar usar MongoDB
+            try:
+                status_checks = await db.status_checks.find().skip(skip).limit(limit).to_list(length=limit)
+                return [StatusCheck(**check) for check in status_checks]
+            except Exception as e:
+                logger.warning(f"MongoDB read failed, using memory: {e}")
+        
+        # Usar base de datos en memoria
+        checks = list(in_memory_db.values())[skip:skip+limit]
+        return [StatusCheck(**check) for check in checks]
+        
     except Exception as e:
         logger.error(f"Error fetching status checks: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -122,56 +180,25 @@ async def get_status_checks(limit: int = 100, skip: int = 0):
 async def get_status_check_by_id(status_id: str):
     """Obtener un status check específico por ID"""
     try:
-        status_check = await db.status_checks.find_one({"id": status_id})
-        if status_check:
-            return StatusCheck(**status_check)
-        else:
-            raise HTTPException(status_code=404, detail="Status check not found")
+        if not use_memory_db and db:
+            # Intentar usar MongoDB
+            try:
+                status_check = await db.status_checks.find_one({"id": status_id})
+                if status_check:
+                    return StatusCheck(**status_check)
+            except Exception as e:
+                logger.warning(f"MongoDB read failed, using memory: {e}")
+        
+        # Usar base de datos en memoria
+        if status_id in in_memory_db:
+            return StatusCheck(**in_memory_db[status_id])
+        
+        raise HTTPException(status_code=404, detail="Status check not found")
+        
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error fetching status check by ID: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-@api_router.put("/status/{status_id}", response_model=StatusCheck)
-async def update_status_check(status_id: str, update_data: StatusCheckUpdate):
-    """Actualizar un status check existente"""
-    try:
-        update_dict = {k: v for k, v in update_data.dict().items() if v is not None}
-        
-        if not update_dict:
-            raise HTTPException(status_code=400, detail="No update data provided")
-        
-        result = await db.status_checks.update_one(
-            {"id": status_id},
-            {"$set": update_dict}
-        )
-        
-        if result.matched_count == 0:
-            raise HTTPException(status_code=404, detail="Status check not found")
-        
-        updated_check = await db.status_checks.find_one({"id": status_id})
-        return StatusCheck(**updated_check)
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error updating status check: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-@api_router.delete("/status/{status_id}")
-async def delete_status_check(status_id: str):
-    """Eliminar un status check"""
-    try:
-        result = await db.status_checks.delete_one({"id": status_id})
-        
-        if result.deleted_count == 0:
-            raise HTTPException(status_code=404, detail="Status check not found")
-        
-        return {"message": "Status check deleted successfully"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting status check: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 # Incluir el router
@@ -196,18 +223,18 @@ async def log_requests(request, call_next):
 @app.on_event("startup")
 async def startup_db_client():
     logger.info("Starting up Clean Project API")
-    try:
-        # Verificar conexión a MongoDB
-        await db.command("ping")
-        logger.info("MongoDB connection established")
-    except Exception as e:
-        logger.error(f"Failed to connect to MongoDB: {e}")
+    db_connected = await check_mongodb()
+    if db_connected:
+        logger.info("✅ Using MongoDB Atlas")
+    else:
+        logger.info("⚠️  Using in-memory database (data will not persist)")
 
 # Evento de cierre
 @app.on_event("shutdown")
 async def shutdown_db_client():
     logger.info("Shutting down Clean Project API")
-    client.close()
+    if client:
+        client.close()
 
 if __name__ == "__main__":
     import uvicorn

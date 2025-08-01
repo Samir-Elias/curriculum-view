@@ -55,25 +55,26 @@ app = FastAPI(
     redoc_url="/api/redoc"
 )
 
-# Configurar CORS - ACTUALIZADO PARA INCLUIR VERCEL
+# CORS CONFIGURACIÓN CORREGIDA PARA VERCEL
 origins = [
     # Desarrollo local
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     
+    # Producción - Tu dominio específico en Vercel
+    "https://curriculum-view.vercel.app",
+    "https://trash-git-main-samir-eliass-projects.vercel.app", # URL específica del deployment
+    
+    # Patrones de Vercel
+    "https://*.vercel.app",
+    "https://vercel.app",
+    
     # Producción - Render (tu API)
     "https://payments-project.onrender.com",
     "https://*.onrender.com",
-    
-    # Producción - Vercel (tu frontend) - AGREGADO
-    "https://*.vercel.app",
-    "https://curriculum-view.vercel.app",  # Cambia por tu dominio real
-    
-    # Si usas dominio personalizado en Vercel
-    # "https://tu-dominio-personalizado.com",
 ]
 
-# CORS más permisivo para desarrollo
+# CORS más permisivo para desarrollo y Vercel
 if os.getenv("ENVIRONMENT") == "development":
     origins.extend([
         "http://localhost:*",
@@ -84,8 +85,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  # Agregado OPTIONS
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"],
     allow_headers=["*"],
+    allow_origin_regex="https://.*\.vercel\.app$",  # Permitir todos los subdominios de Vercel
 )
 
 # Modelos Pydantic
@@ -112,6 +114,7 @@ class HealthCheck(BaseModel):
     version: str = "1.0.0"
     database_connected: bool = False
     database_type: str = "memory"
+    cors_origins: List[str] = []
 
 # Router de API
 api_router = APIRouter(prefix="/api/v1")
@@ -141,7 +144,8 @@ async def root():
     
     return HealthCheck(
         database_connected=db_connected,
-        database_type=db_type
+        database_type=db_type,
+        cors_origins=origins[:5]  # Mostrar solo los primeros 5 para no saturar
     )
 
 @api_router.get("/health", response_model=HealthCheck)
@@ -154,8 +158,19 @@ async def health_check():
     
     return HealthCheck(
         database_connected=db_connected,
-        database_type=db_type
+        database_type=db_type,
+        cors_origins=origins[:5]
     )
+
+# Endpoint específico para verificar CORS
+@api_router.get("/cors-test")
+async def cors_test():
+    """Endpoint para probar CORS desde el frontend"""
+    return {
+        "message": "CORS funcionando correctamente",
+        "timestamp": datetime.utcnow().isoformat(),
+        "allowed_origins": origins[:10]
+    }
 
 @api_router.post("/status", response_model=StatusCheck)
 async def create_status_check(input: StatusCheckCreate):
@@ -260,6 +275,12 @@ app.include_router(api_router)
 @app.middleware("http")
 async def log_requests(request, call_next):
     start_time = datetime.utcnow()
+    
+    # Log CORS headers para debugging
+    origin = request.headers.get("origin")
+    if origin:
+        logger.info(f"Request from origin: {origin}")
+    
     response = await call_next(request)
     process_time = (datetime.utcnow() - start_time).total_seconds()
     
@@ -275,6 +296,7 @@ async def log_requests(request, call_next):
 @app.on_event("startup")
 async def startup_db_client():
     logger.info("🚀 Starting up Clean Project API")
+    logger.info(f"🌐 CORS origins configured: {len(origins)} origins")
     
     # Probar conexión sin bloquear el startup
     if client is not None and db is not None:

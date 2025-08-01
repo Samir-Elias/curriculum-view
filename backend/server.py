@@ -55,19 +55,36 @@ app = FastAPI(
     redoc_url="/api/redoc"
 )
 
-# Configurar CORS
+# Configurar CORS - ACTUALIZADO PARA INCLUIR VERCEL
 origins = [
+    # Desarrollo local
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    
+    # Producción - Render (tu API)
     "https://payments-project.onrender.com",
     "https://*.onrender.com",
+    
+    # Producción - Vercel (tu frontend) - AGREGADO
+    "https://*.vercel.app",
+    "https://curriculum-view.vercel.app",  # Cambia por tu dominio real
+    
+    # Si usas dominio personalizado en Vercel
+    # "https://tu-dominio-personalizado.com",
 ]
+
+# CORS más permisivo para desarrollo
+if os.getenv("ENVIRONMENT") == "development":
+    origins.extend([
+        "http://localhost:*",
+        "http://127.0.0.1:*",
+    ])
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  # Agregado OPTIONS
     allow_headers=["*"],
 )
 

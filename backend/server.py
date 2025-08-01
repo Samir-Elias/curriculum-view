@@ -1,5 +1,3 @@
-# server.py - Versión con fallback a base de datos en memoria
-
 from fastapi import FastAPI, APIRouter, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -28,18 +26,24 @@ in_memory_db: Dict[str, dict] = {}
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
 DB_NAME = os.getenv("DB_NAME", "clean_database")
 
-# Intentar conectar a MongoDB
+# Variables globales para MongoDB
 client = None
 db = None
 use_memory_db = True
 
+# Intentar conectar a MongoDB
 try:
-    client = AsyncIOMotorClient(MONGO_URL)
-    db = client[DB_NAME]
-    use_memory_db = False
-    logger.info("MongoDB client configured - will test connection on first request")
+    if MONGO_URL and MONGO_URL != "mongodb://localhost:27017":
+        client = AsyncIOMotorClient(MONGO_URL)
+        db = client[DB_NAME]
+        logger.info("MongoDB client configured")
+    else:
+        logger.info("No MongoDB URL provided, using memory database")
+        use_memory_db = True
 except Exception as e:
-    logger.warning(f"MongoDB not available, using in-memory database: {e}")
+    logger.warning(f"MongoDB client configuration failed: {e}")
+    client = None
+    db = None
     use_memory_db = True
 
 # Crear la aplicación FastAPI
@@ -92,27 +96,30 @@ class HealthCheck(BaseModel):
     database_connected: bool = False
     database_type: str = "memory"
 
-# Función para verificar MongoDB
-async def check_mongodb():
-    global use_memory_db
-    if client and db:
-        try:
-            await client.admin.command('ping', serverSelectionTimeoutMS=5000)
-            use_memory_db = False
-            return True
-        except Exception as e:
-            logger.warning(f"MongoDB not available: {e}")
-            use_memory_db = True
-            return False
-    return False
-
 # Router de API
 api_router = APIRouter(prefix="/api/v1")
+
+async def test_mongodb_connection():
+    """Función para probar la conexión a MongoDB de forma segura"""
+    global use_memory_db
+    
+    if client is None or db is None:
+        return False
+    
+    try:
+        # Probar conexión con timeout corto
+        await client.admin.command('ping', serverSelectionTimeoutMS=3000)
+        use_memory_db = False
+        return True
+    except Exception as e:
+        logger.warning(f"MongoDB connection failed: {str(e)[:100]}...")
+        use_memory_db = True
+        return False
 
 @api_router.get("/", response_model=HealthCheck)
 async def root():
     """Endpoint raíz con información de salud de la API"""
-    db_connected = await check_mongodb()
+    db_connected = await test_mongodb_connection()
     db_type = "mongodb" if db_connected else "memory"
     
     return HealthCheck(
@@ -123,8 +130,10 @@ async def root():
 @api_router.get("/health", response_model=HealthCheck)
 async def health_check():
     """Endpoint de verificación de salud"""
-    db_connected = await check_mongodb()
+    db_connected = await test_mongodb_connection()
     db_type = "mongodb" if db_connected else "memory"
+    
+    logger.info(f"Health check - DB connected: {db_connected}, Type: {db_type}")
     
     return HealthCheck(
         database_connected=db_connected,
@@ -137,15 +146,15 @@ async def create_status_check(input: StatusCheckCreate):
     try:
         status_obj = StatusCheck(**input.dict())
         
-        if not use_memory_db and db:
-            # Intentar usar MongoDB
+        # Intentar MongoDB primero si está disponible
+        if not use_memory_db and client is not None and db is not None:
             try:
                 result = await db.status_checks.insert_one(status_obj.dict())
                 if result.inserted_id:
                     logger.info(f"Created status check in MongoDB for client: {input.client_name}")
                     return status_obj
             except Exception as e:
-                logger.warning(f"MongoDB insert failed, using memory: {e}")
+                logger.warning(f"MongoDB insert failed, using memory: {str(e)[:50]}...")
         
         # Usar base de datos en memoria
         in_memory_db[status_obj.id] = status_obj.dict()
@@ -160,13 +169,13 @@ async def create_status_check(input: StatusCheckCreate):
 async def get_status_checks(limit: int = 100, skip: int = 0):
     """Obtener lista de status checks con paginación"""
     try:
-        if not use_memory_db and db:
-            # Intentar usar MongoDB
+        # Intentar MongoDB primero si está disponible
+        if not use_memory_db and client is not None and db is not None:
             try:
                 status_checks = await db.status_checks.find().skip(skip).limit(limit).to_list(length=limit)
                 return [StatusCheck(**check) for check in status_checks]
             except Exception as e:
-                logger.warning(f"MongoDB read failed, using memory: {e}")
+                logger.warning(f"MongoDB read failed, using memory: {str(e)[:50]}...")
         
         # Usar base de datos en memoria
         checks = list(in_memory_db.values())[skip:skip+limit]
@@ -180,14 +189,14 @@ async def get_status_checks(limit: int = 100, skip: int = 0):
 async def get_status_check_by_id(status_id: str):
     """Obtener un status check específico por ID"""
     try:
-        if not use_memory_db and db:
-            # Intentar usar MongoDB
+        # Intentar MongoDB primero si está disponible
+        if not use_memory_db and client is not None and db is not None:
             try:
                 status_check = await db.status_checks.find_one({"id": status_id})
                 if status_check:
                     return StatusCheck(**status_check)
             except Exception as e:
-                logger.warning(f"MongoDB read failed, using memory: {e}")
+                logger.warning(f"MongoDB read failed, using memory: {str(e)[:50]}...")
         
         # Usar base de datos en memoria
         if status_id in in_memory_db:
@@ -199,6 +208,32 @@ async def get_status_check_by_id(status_id: str):
         raise
     except Exception as e:
         logger.error(f"Error fetching status check by ID: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@api_router.delete("/status/{status_id}")
+async def delete_status_check(status_id: str):
+    """Eliminar un status check"""
+    try:
+        # Intentar MongoDB primero si está disponible
+        if not use_memory_db and client is not None and db is not None:
+            try:
+                result = await db.status_checks.delete_one({"id": status_id})
+                if result.deleted_count > 0:
+                    return {"message": "Status check deleted successfully"}
+            except Exception as e:
+                logger.warning(f"MongoDB delete failed, using memory: {str(e)[:50]}...")
+        
+        # Usar base de datos en memoria
+        if status_id in in_memory_db:
+            del in_memory_db[status_id]
+            return {"message": "Status check deleted successfully"}
+        else:
+            raise HTTPException(status_code=404, detail="Status check not found")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting status check: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 # Incluir el router
@@ -219,21 +254,22 @@ async def log_requests(request, call_next):
     
     return response
 
-# Evento de inicio
+# Evento de inicio - Simplificado para evitar errores
 @app.on_event("startup")
 async def startup_db_client():
-    logger.info("Starting up Clean Project API")
-    db_connected = await check_mongodb()
-    if db_connected:
-        logger.info("✅ Using MongoDB Atlas")
+    logger.info("🚀 Starting up Clean Project API")
+    
+    # Probar conexión sin bloquear el startup
+    if client is not None and db is not None:
+        logger.info("📡 MongoDB client configured, will test on first request")
     else:
-        logger.info("⚠️  Using in-memory database (data will not persist)")
+        logger.info("💾 Using in-memory database")
 
 # Evento de cierre
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    logger.info("Shutting down Clean Project API")
-    if client:
+    logger.info("👋 Shutting down Clean Project API")
+    if client is not None:
         client.close()
 
 if __name__ == "__main__":

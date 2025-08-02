@@ -1,14 +1,18 @@
-# requirements.txt - Versiones más compatibles con Render
-# Versiones específicas que funcionan mejor en entornos de producción
+# requirements.txt - Versiones actualizadas con autenticación
 
 # FastAPI y servidor
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 
-# Base de datos MongoDB - VERSIONES MÁS ESTABLES
+# Base de datos MongoDB
 pymongo==4.3.3
 motor==3.1.2
 dnspython==2.4.2
+
+# Autenticación y seguridad
+PyJWT==2.8.0
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
 
 # Configuración y validación
 python-dotenv==1.0.0

@@ -38,14 +38,24 @@ function App() {
     }
   }, []);
 
-  // Componente de información de debug
+  // Componente de información de debug - MEJORADO para móviles
   const DebugInfo = () => (
-    <div className="fixed top-4 right-4 bg-black bg-opacity-75 text-white p-3 rounded-lg text-xs z-50">
-      <div>Frontend: React</div>
-      <div>Backend: {isOnline ? '🟢 Online' : '🔴 Offline'}</div>
-      <div>API: {API_BASE_URL}</div>
-      <div>Vista: {currentView}</div>
-      {isAdminLoggedIn && <div>Admin: ✅ Conectado</div>}
+    <div className="fixed top-4 right-4 z-50">
+      {/* Versión desktop - información completa */}
+      <div className="hidden md:block bg-black bg-opacity-75 text-white p-3 rounded-lg text-xs">
+        <div>Frontend: React</div>
+        <div>Backend: {isOnline ? '🟢 Online' : '🔴 Offline'}</div>
+        <div>API: {API_BASE_URL}</div>
+        <div>Vista: {currentView}</div>
+        {isAdminLoggedIn && <div>Admin: ✅ Conectado</div>}
+      </div>
+      
+      {/* Versión móvil - solo indicador de estado compacto */}
+      <div className="md:hidden bg-black bg-opacity-60 text-white px-3 py-2 rounded-full text-xs flex items-center gap-2">
+        <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-400' : 'bg-red-400'}`}></div>
+        <span className="text-xs">DB</span>
+        {isAdminLoggedIn && <span className="text-xs">👑</span>}
+      </div>
     </div>
   );
 
@@ -62,10 +72,10 @@ function App() {
         <nav className="absolute top-0 left-0 right-0 z-50 p-6">
           <div className="max-w-6xl mx-auto flex justify-between items-center">
             <div className="text-xl font-bold">Estimador de Pagos</div>
-            <div className="flex space-x-4">
+            <div className="flex space-x-2 md:space-x-4">
               <button
                 onClick={() => setCurrentView('home')}
-                className={`px-4 py-2 rounded-lg transition-all ${
+                className={`px-2 md:px-4 py-2 rounded-lg transition-all text-sm md:text-base ${
                   currentView === 'home' 
                     ? 'bg-white text-purple-900 font-semibold' 
                     : 'text-white hover:bg-white/20'
@@ -75,7 +85,7 @@ function App() {
               </button>
               <button
                 onClick={() => setCurrentView('estimator')}
-                className={`px-4 py-2 rounded-lg transition-all ${
+                className={`px-2 md:px-4 py-2 rounded-lg transition-all text-sm md:text-base ${
                   currentView === 'estimator' 
                     ? 'bg-white text-purple-900 font-semibold' 
                     : 'text-white hover:bg-white/20'
@@ -91,7 +101,7 @@ function App() {
                     setCurrentView('admin-login');
                   }
                 }}
-                className={`px-4 py-2 rounded-lg transition-all ${
+                className={`px-2 md:px-4 py-2 rounded-lg transition-all text-sm md:text-base ${
                   currentView.includes('admin') 
                     ? 'bg-white text-purple-900 font-semibold' 
                     : 'text-white hover:bg-white/20'
@@ -106,7 +116,7 @@ function App() {
         {/* Contenido del Hero */}
         <div className="text-center max-w-4xl px-6">
           <motion.h1
-            className="text-6xl md:text-8xl font-bold mb-6 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent"
+            className="text-4xl md:text-6xl lg:text-8xl font-bold mb-6 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent"
             initial={{ opacity: 0, y: -50 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.2 }}
@@ -115,7 +125,7 @@ function App() {
           </motion.h1>
           
           <motion.p
-            className="text-xl md:text-2xl mb-8 text-gray-300"
+            className="text-lg md:text-xl lg:text-2xl mb-8 text-gray-300"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.4 }}
@@ -131,7 +141,7 @@ function App() {
           >
             <motion.button
               onClick={() => setCurrentView('estimator')}
-              className="bg-white text-purple-900 px-8 py-3 rounded-full font-semibold hover:bg-gray-100 transition-colors shadow-lg"
+              className="bg-white text-purple-900 px-6 md:px-8 py-3 rounded-full font-semibold hover:bg-gray-100 transition-colors shadow-lg text-sm md:text-base"
               whileHover={{ scale: 1.05, boxShadow: "0 10px 25px rgba(0,0,0,0.2)" }}
               whileTap={{ scale: 0.95 }}
             >
@@ -140,7 +150,7 @@ function App() {
             
             <motion.button
               onClick={() => setCurrentView('admin-login')}
-              className="border-2 border-white text-white px-8 py-3 rounded-full font-semibold hover:bg-white hover:text-purple-900 transition-colors"
+              className="border-2 border-white text-white px-6 md:px-8 py-3 rounded-full font-semibold hover:bg-white hover:text-purple-900 transition-colors text-sm md:text-base"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
@@ -212,6 +222,11 @@ function App() {
     setCurrentView('home');
   };
 
+  // Manejar volver atrás desde admin login
+  const handleGoBackFromAdmin = () => {
+    setCurrentView('home');
+  };
+
   // Verificar conexión al backend
   useEffect(() => {
     const checkBackendConnection = async () => {
@@ -245,22 +260,22 @@ function App() {
             <div className="fixed top-4 left-4 z-50">
               <button
                 onClick={() => setCurrentView('home')}
-                className="bg-white text-purple-900 px-4 py-2 rounded-lg shadow-lg hover:bg-gray-100 transition-colors"
+                className="bg-white text-purple-900 px-3 md:px-4 py-2 rounded-lg shadow-lg hover:bg-gray-100 transition-colors text-sm md:text-base"
               >
-                ← Volver al Inicio
+                ← <span className="hidden sm:inline">Volver al Inicio</span><span className="sm:hidden">Volver</span>
               </button>
             </div>
           </motion.div>
         );
 
       case 'admin-login':
-        return <AdminLogin onLogin={handleAdminLogin} />;
+        return <AdminLogin onLogin={handleAdminLogin} onGoBack={handleGoBackFromAdmin} />;
 
       case 'admin-dashboard':
         return isAdminLoggedIn ? (
           <AdminDashboard onLogout={handleAdminLogout} />
         ) : (
-          <AdminLogin onLogin={handleAdminLogin} />
+          <AdminLogin onLogin={handleAdminLogin} onGoBack={handleGoBackFromAdmin} />
         );
 
       case 'home':

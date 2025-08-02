@@ -1,3 +1,4 @@
+# backend/server.py - Actualización para incluir el estimador
 from fastapi import FastAPI, APIRouter, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 # Base de datos en memoria como fallback
 in_memory_db: Dict[str, dict] = {}
+estimates_memory_db: Dict[str, dict] = {}  # Nueva DB para estimaciones
 
 # Configuración de MongoDB
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
@@ -48,33 +50,32 @@ except Exception as e:
 
 # Crear la aplicación FastAPI
 app = FastAPI(
-    title="Clean Project API",
-    description="API completamente limpia sin marcas de agua",
-    version="1.0.0",
+    title="Clean Project API with Project Estimator",
+    description="API completamente limpia con estimador de proyectos",
+    version="1.1.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc"
 )
 
-# CORS CONFIGURACIÓN CORREGIDA PARA VERCEL
+# CORS CONFIGURACIÓN
 origins = [
     # Desarrollo local
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     
-    # Producción - Tu dominio específico en Vercel
+    # Tu dominio específico en Vercel
     "https://curriculum-view.vercel.app",
-    "https://trash-git-main-samir-eliass-projects.vercel.app", # URL específica del deployment
+    "https://trash-git-main-samir-eliass-projects.vercel.app",
     
     # Patrones de Vercel
     "https://*.vercel.app",
     "https://vercel.app",
     
-    # Producción - Render (tu API)
+    # Render
     "https://payments-project.onrender.com",
     "https://*.onrender.com",
 ]
 
-# CORS más permisivo para desarrollo y Vercel
 if os.getenv("ENVIRONMENT") == "development":
     origins.extend([
         "http://localhost:*",
@@ -87,10 +88,12 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"],
     allow_headers=["*"],
-    allow_origin_regex="https://.*\.vercel\.app$",  # Permitir todos los subdominios de Vercel
+    allow_origin_regex="https://.*\.vercel\.app$",
 )
 
-# Modelos Pydantic
+# ========================================
+# MODELOS EXISTENTES (tu código actual)
+# ========================================
 class StatusCheck(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     client_name: str
@@ -103,18 +106,42 @@ class StatusCheckCreate(BaseModel):
     status: str = "active"
     metadata: Optional[dict] = None
 
-class StatusCheckUpdate(BaseModel):
-    client_name: Optional[str] = None
-    status: Optional[str] = None
-    metadata: Optional[dict] = None
-
 class HealthCheck(BaseModel):
     status: str = "healthy"
     timestamp: datetime = Field(default_factory=datetime.utcnow)
-    version: str = "1.0.0"
+    version: str = "1.1.0"
     database_connected: bool = False
     database_type: str = "memory"
     cors_origins: List[str] = []
+
+# ========================================
+# NUEVOS MODELOS PARA ESTIMADOR
+# ========================================
+class ProjectEstimate(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    project_name: str
+    project_type: str
+    complexity: str
+    features: Dict[str, bool]
+    team: Dict[str, int]
+    hourly_rate: float
+    estimated_hours: int
+    estimated_weeks: int
+    estimated_cost: float
+    breakdown: Dict[str, int]
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+class ProjectEstimateCreate(BaseModel):
+    project_name: str
+    project_type: str
+    complexity: str
+    features: Dict[str, bool]
+    team: Dict[str, int]
+    hourly_rate: float
+    estimated_hours: int
+    estimated_weeks: int
+    estimated_cost: float
+    breakdown: Dict[str, int]
 
 # Router de API
 api_router = APIRouter(prefix="/api/v1")
@@ -127,7 +154,6 @@ async def test_mongodb_connection():
         return False
     
     try:
-        # Probar conexión con timeout corto
         await client.admin.command('ping', serverSelectionTimeoutMS=3000)
         use_memory_db = False
         return True
@@ -136,6 +162,9 @@ async def test_mongodb_connection():
         use_memory_db = True
         return False
 
+# ========================================
+# ENDPOINTS EXISTENTES (tu código actual)
+# ========================================
 @api_router.get("/", response_model=HealthCheck)
 async def root():
     """Endpoint raíz con información de salud de la API"""
@@ -145,7 +174,7 @@ async def root():
     return HealthCheck(
         database_connected=db_connected,
         database_type=db_type,
-        cors_origins=origins[:5]  # Mostrar solo los primeros 5 para no saturar
+        cors_origins=origins[:5]
     )
 
 @api_router.get("/health", response_model=HealthCheck)
@@ -162,121 +191,165 @@ async def health_check():
         cors_origins=origins[:5]
     )
 
-# Endpoint específico para verificar CORS
-@api_router.get("/cors-test")
-async def cors_test():
-    """Endpoint para probar CORS desde el frontend"""
-    return {
-        "message": "CORS funcionando correctamente",
-        "timestamp": datetime.utcnow().isoformat(),
-        "allowed_origins": origins[:10]
-    }
+# ... (tus otros endpoints existentes de status checks) ...
 
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    """Crear un nuevo status check"""
+# ========================================
+# NUEVOS ENDPOINTS PARA ESTIMADOR
+# ========================================
+@api_router.post("/estimates", response_model=ProjectEstimate)
+async def create_estimate(estimate_data: ProjectEstimateCreate):
+    """Crear una nueva estimación de proyecto"""
     try:
-        status_obj = StatusCheck(**input.dict())
+        estimate = ProjectEstimate(**estimate_data.dict())
         
         # Intentar MongoDB primero si está disponible
         if not use_memory_db and client is not None and db is not None:
             try:
-                result = await db.status_checks.insert_one(status_obj.dict())
+                result = await db.project_estimates.insert_one(estimate.dict())
                 if result.inserted_id:
-                    logger.info(f"Created status check in MongoDB for client: {input.client_name}")
-                    return status_obj
+                    logger.info(f"Created estimate in MongoDB: {estimate.project_name}")
+                    return estimate
             except Exception as e:
                 logger.warning(f"MongoDB insert failed, using memory: {str(e)[:50]}...")
         
         # Usar base de datos en memoria
-        in_memory_db[status_obj.id] = status_obj.dict()
-        logger.info(f"Created status check in memory for client: {input.client_name}")
-        return status_obj
-        
+        estimates_memory_db[estimate.id] = estimate.dict()
+        logger.info(f"Created estimate in memory: {estimate.project_name}")
+        return estimate
+            
     except Exception as e:
-        logger.error(f"Error creating status check: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.error(f"Error creating estimate: {e}")
+        raise HTTPException(status_code=500, detail=f"Error creating estimate: {str(e)}")
 
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks(limit: int = 100, skip: int = 0):
-    """Obtener lista de status checks con paginación"""
+@api_router.get("/estimates", response_model=List[ProjectEstimate])
+async def get_estimates(limit: int = 50, skip: int = 0):
+    """Obtener lista de estimaciones"""
     try:
         # Intentar MongoDB primero si está disponible
         if not use_memory_db and client is not None and db is not None:
             try:
-                status_checks = await db.status_checks.find().skip(skip).limit(limit).to_list(length=limit)
-                return [StatusCheck(**check) for check in status_checks]
+                estimates = await db.project_estimates.find().sort("timestamp", -1).skip(skip).limit(limit).to_list(length=limit)
+                return [ProjectEstimate(**estimate) for estimate in estimates]
             except Exception as e:
                 logger.warning(f"MongoDB read failed, using memory: {str(e)[:50]}...")
         
         # Usar base de datos en memoria
-        checks = list(in_memory_db.values())[skip:skip+limit]
-        return [StatusCheck(**check) for check in checks]
+        estimates_list = list(estimates_memory_db.values())
+        estimates_list.sort(key=lambda x: x['timestamp'], reverse=True)
         
+        # Aplicar paginación
+        paginated = estimates_list[skip:skip+limit]
+        return [ProjectEstimate(**estimate) for estimate in paginated]
+            
     except Exception as e:
-        logger.error(f"Error fetching status checks: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.error(f"Error fetching estimates: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching estimates: {str(e)}")
 
-@api_router.get("/status/{status_id}", response_model=StatusCheck)
-async def get_status_check_by_id(status_id: str):
-    """Obtener un status check específico por ID"""
+@api_router.get("/estimates/{estimate_id}", response_model=ProjectEstimate)
+async def get_estimate_by_id(estimate_id: str):
+    """Obtener una estimación específica"""
     try:
         # Intentar MongoDB primero si está disponible
         if not use_memory_db and client is not None and db is not None:
             try:
-                status_check = await db.status_checks.find_one({"id": status_id})
-                if status_check:
-                    return StatusCheck(**status_check)
+                estimate = await db.project_estimates.find_one({"id": estimate_id})
+                if estimate:
+                    return ProjectEstimate(**estimate)
             except Exception as e:
                 logger.warning(f"MongoDB read failed, using memory: {str(e)[:50]}...")
         
         # Usar base de datos en memoria
-        if status_id in in_memory_db:
-            return StatusCheck(**in_memory_db[status_id])
+        if estimate_id in estimates_memory_db:
+            return ProjectEstimate(**estimates_memory_db[estimate_id])
         
-        raise HTTPException(status_code=404, detail="Status check not found")
+        raise HTTPException(status_code=404, detail="Estimate not found")
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error fetching status check by ID: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.error(f"Error fetching estimate: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching estimate: {str(e)}")
 
-@api_router.delete("/status/{status_id}")
-async def delete_status_check(status_id: str):
-    """Eliminar un status check"""
+@api_router.delete("/estimates/{estimate_id}")
+async def delete_estimate(estimate_id: str):
+    """Eliminar una estimación"""
     try:
         # Intentar MongoDB primero si está disponible
         if not use_memory_db and client is not None and db is not None:
             try:
-                result = await db.status_checks.delete_one({"id": status_id})
+                result = await db.project_estimates.delete_one({"id": estimate_id})
                 if result.deleted_count > 0:
-                    return {"message": "Status check deleted successfully"}
+                    return {"message": "Estimate deleted successfully"}
             except Exception as e:
                 logger.warning(f"MongoDB delete failed, using memory: {str(e)[:50]}...")
         
         # Usar base de datos en memoria
-        if status_id in in_memory_db:
-            del in_memory_db[status_id]
-            return {"message": "Status check deleted successfully"}
-        else:
-            raise HTTPException(status_code=404, detail="Status check not found")
+        if estimate_id in estimates_memory_db:
+            del estimates_memory_db[estimate_id]
+            return {"message": "Estimate deleted successfully"}
+        
+        raise HTTPException(status_code=404, detail="Estimate not found")
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error deleting status check: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.error(f"Error deleting estimate: {e}")
+        raise HTTPException(status_code=500, detail=f"Error deleting estimate: {str(e)}")
 
-# Incluir el router
+@api_router.get("/estimates-stats/summary")
+async def get_estimates_stats():
+    """Obtener estadísticas de las estimaciones"""
+    try:
+        # Intentar MongoDB primero si está disponible
+        if not use_memory_db and client is not None and db is not None:
+            try:
+                estimates = await db.project_estimates.find().to_list(length=None)
+            except Exception as e:
+                estimates = list(estimates_memory_db.values())
+        else:
+            estimates = list(estimates_memory_db.values())
+        
+        if not estimates:
+            return {
+                "total_estimates": 0,
+                "total_projects_cost": 0,
+                "avg_project_hours": 0,
+                "most_common_type": "N/A",
+                "total_hours": 0
+            }
+        
+        total_cost = sum(est['estimated_cost'] for est in estimates)
+        total_hours = sum(est['estimated_hours'] for est in estimates)
+        avg_hours = total_hours / len(estimates) if estimates else 0
+        
+        # Tipo más común
+        types_count = {}
+        for est in estimates:
+            project_type = est['project_type']
+            types_count[project_type] = types_count.get(project_type, 0) + 1
+        
+        most_common_type = max(types_count.items(), key=lambda x: x[1])[0] if types_count else "N/A"
+        
+        return {
+            "total_estimates": len(estimates),
+            "total_projects_cost": round(total_cost, 2),
+            "avg_project_hours": round(avg_hours, 1),
+            "most_common_type": most_common_type,
+            "total_hours": total_hours
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting stats: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting stats: {str(e)}")
+
+# Incluir el router principal
 app.include_router(api_router)
 
-# Middleware de logging
+# Middleware de logging (tu código existente)
 @app.middleware("http")
 async def log_requests(request, call_next):
     start_time = datetime.utcnow()
     
-    # Log CORS headers para debugging
     origin = request.headers.get("origin")
     if origin:
         logger.info(f"Request from origin: {origin}")
@@ -292,19 +365,17 @@ async def log_requests(request, call_next):
     
     return response
 
-# Evento de inicio - Simplificado para evitar errores
+# Eventos de startup y shutdown (tu código existente)
 @app.on_event("startup")
 async def startup_db_client():
-    logger.info("🚀 Starting up Clean Project API")
+    logger.info("🚀 Starting up Clean Project API with Project Estimator")
     logger.info(f"🌐 CORS origins configured: {len(origins)} origins")
     
-    # Probar conexión sin bloquear el startup
     if client is not None and db is not None:
         logger.info("📡 MongoDB client configured, will test on first request")
     else:
         logger.info("💾 Using in-memory database")
 
-# Evento de cierre
 @app.on_event("shutdown")
 async def shutdown_db_client():
     logger.info("👋 Shutting down Clean Project API")

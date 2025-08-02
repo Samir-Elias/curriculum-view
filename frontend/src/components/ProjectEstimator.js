@@ -268,7 +268,7 @@ const ProjectEstimator = () => {
                 value={project.name}
                 onChange={(e) => setProject(prev => ({ ...prev, name: e.target.value }))}
                 className="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                placeholder="Ej: TeloApp v2.0"
+                placeholder="Ej: WebApp v2.0"
               />
             </motion.div>
 
@@ -287,7 +287,7 @@ const ProjectEstimator = () => {
               >
                 <option value="landing">Landing Page</option>
                 <option value="web-app">Aplicación Web</option>
-                <option value="location-app">App de Ubicaciones (como TeloApp)</option>
+                <option value="location-app">App de Ubicaciones</option>
                 <option value="e-commerce">E-commerce</option>
                 <option value="enterprise">Sistema Empresarial</option>
                 <option value="mobile-app">Aplicación Móvil</option>

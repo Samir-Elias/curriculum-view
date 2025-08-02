@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 
-const AdminLogin = ({ onLogin }) => {
+const AdminLogin = ({ onLogin, onGoBack }) => {
   const [credentials, setCredentials] = useState({
     username: '',
     password: ''
@@ -48,10 +48,31 @@ const AdminLogin = ({ onLogin }) => {
     setError(''); // Limpiar error cuando el usuario escribe
   };
 
+  const handleGoBack = () => {
+    if (onGoBack) {
+      onGoBack();
+    }
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-800">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-800 relative">
+      {/* Botón de volver atrás */}
+      <motion.button
+        onClick={handleGoBack}
+        className="absolute top-6 left-6 bg-white/20 backdrop-blur-sm text-white px-4 py-2 rounded-lg hover:bg-white/30 transition-all z-10 flex items-center gap-2"
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.5 }}
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+      >
+        <span>←</span>
+        <span className="hidden sm:inline">Volver al Inicio</span>
+        <span className="sm:hidden">Volver</span>
+      </motion.button>
+
       <motion.div
-        className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md"
+        className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md mx-4"
         initial={{ opacity: 0, y: 20, scale: 0.95 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.6 }}

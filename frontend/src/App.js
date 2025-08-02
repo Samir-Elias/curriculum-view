@@ -424,7 +424,7 @@ function App() {
                   </div>
                 </div>
                 <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-500">
-                  © 2024 Tu Proyecto. Completamente libre de marcas de agua.
+                  © 2025 Estimador De Proyectos. Samir Elias Dev.
                 </div>
               </div>
             </footer>

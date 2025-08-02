@@ -61,7 +61,7 @@ function App() {
         {/* Navegación superior */}
         <nav className="absolute top-0 left-0 right-0 z-50 p-6">
           <div className="max-w-6xl mx-auto flex justify-between items-center">
-            <div className="text-xl font-bold">Tu Proyecto Limpio</div>
+            <div className="text-xl font-bold">Estimador de Pagos</div>
             <div className="flex space-x-4">
               <button
                 onClick={() => setCurrentView('home')}
@@ -111,7 +111,7 @@ function App() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.2 }}
           >
-            Tu Proyecto Limpio
+            Bienvenido !
           </motion.h1>
           
           <motion.p
@@ -171,8 +171,8 @@ function App() {
             whileHover={{ scale: 1.05 }}
           >
             <div className="text-4xl text-blue-600 mb-4">🚀</div>
-            <div className="text-3xl font-bold text-gray-800">100%</div>
-            <div className="text-gray-600">Sin Marcas de Agua</div>
+            <div className="text-3xl font-bold text-gray-800"> 100%</div>
+            <div className="text-gray-600">Personalizable</div>
           </motion.div>
           
           <motion.div 

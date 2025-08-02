@@ -1,6 +1,8 @@
+// frontend/src/components/ProjectEstimator.js - Actualizado con NotificationModal
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import axios from 'axios';
+import NotificationModal from './NotificationModal';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 
                      process.env.NEXT_PUBLIC_API_URL || 
@@ -43,6 +45,14 @@ const ProjectEstimator = () => {
 
   const [savedEstimates, setSavedEstimates] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Estado para el modal de notificación
+  const [notification, setNotification] = useState({
+    isOpen: false,
+    type: 'success',
+    title: '',
+    message: ''
+  });
 
   // Base hours por tipo de proyecto
   const baseHours = {
@@ -130,9 +140,27 @@ const ProjectEstimator = () => {
     }
   };
 
+  // Función para mostrar notificaciones
+  const showNotification = (type, title, message) => {
+    setNotification({
+      isOpen: true,
+      type,
+      title,
+      message
+    });
+  };
+
+  const closeNotification = () => {
+    setNotification(prev => ({ ...prev, isOpen: false }));
+  };
+
   const saveEstimate = async () => {
     if (!project.name.trim()) {
-      alert('Por favor ingresa un nombre para el proyecto');
+      showNotification(
+        'warning',
+        '⚠️ Campo Requerido',
+        'Por favor ingresa un nombre para el proyecto antes de guardarlo.'
+      );
       return;
     }
 
@@ -153,10 +181,23 @@ const ProjectEstimator = () => {
 
       await axios.post(`${API_BASE_URL}/estimates`, estimateData);
       await fetchSavedEstimates();
-      alert('Estimación guardada exitosamente!');
+      
+      // Mostrar notificación de éxito
+      showNotification(
+        'success',
+        '🎉 ¡Estimación Guardada!',
+        `El proyecto "${project.name}" se ha guardado exitosamente en la base de datos. Puedes verlo en el panel de administración.`
+      );
+
     } catch (error) {
       console.error('Error saving estimate:', error);
-      alert('Error al guardar la estimación');
+      
+      // Mostrar notificación de error
+      showNotification(
+        'error',
+        '❌ Error al Guardar',
+        'Hubo un problema al guardar la estimación en la base de datos. Por favor, inténtalo de nuevo.'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -184,6 +225,17 @@ const ProjectEstimator = () => {
 
   return (
     <div className="max-w-7xl mx-auto p-6 bg-gray-50 min-h-screen">
+      {/* Notification Modal */}
+      <NotificationModal
+        isOpen={notification.isOpen}
+        onClose={closeNotification}
+        type={notification.type}
+        title={notification.title}
+        message={notification.message}
+        autoClose={true}
+        autoCloseDelay={4000}
+      />
+
       <motion.div 
         className="bg-white rounded-xl shadow-2xl p-8 mb-8"
         initial={{ opacity: 0, y: 20 }}
@@ -394,11 +446,18 @@ const ProjectEstimator = () => {
               <motion.button
                 onClick={saveEstimate}
                 disabled={isLoading || !project.name.trim()}
-                className="w-full mt-6 bg-white text-purple-700 py-3 px-6 rounded-lg font-semibold hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full mt-6 bg-white text-purple-700 py-3 px-6 rounded-lg font-semibold hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
               >
-                {isLoading ? 'Guardando...' : 'Guardar Estimación'}
+                {isLoading ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="w-4 h-4 border-2 border-purple-700 border-t-transparent rounded-full animate-spin"></div>
+                    <span>Guardando...</span>
+                  </div>
+                ) : (
+                  '💾 Guardar Estimación'
+                )}
               </motion.button>
             </motion.div>
 

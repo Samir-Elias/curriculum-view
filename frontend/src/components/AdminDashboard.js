@@ -1,6 +1,8 @@
+// frontend/src/components/AdminDashboard.js - Actualizado con NotificationModal
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
+import NotificationModal from './NotificationModal';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
 
@@ -12,6 +14,14 @@ const AdminDashboard = ({ onLogout }) => {
   const [filter, setFilter] = useState('all');
   const [sortBy, setSortBy] = useState('timestamp');
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Estado para el modal de notificación
+  const [notification, setNotification] = useState({
+    isOpen: false,
+    type: 'success',
+    title: '',
+    message: ''
+  });
 
   useEffect(() => {
     fetchEstimates();
@@ -26,6 +36,11 @@ const AdminDashboard = ({ onLogout }) => {
     } catch (error) {
       console.error('Error fetching estimates:', error);
       setEstimates([]);
+      showNotification(
+        'error',
+        '❌ Error de Conexión',
+        'No se pudieron cargar las estimaciones desde la base de datos.'
+      );
     } finally {
       setLoading(false);
     }
@@ -41,19 +56,63 @@ const AdminDashboard = ({ onLogout }) => {
     }
   };
 
-  const deleteEstimate = async (estimateId) => {
-    if (!window.confirm('¿Estás seguro de que quieres eliminar esta estimación?')) {
-      return;
-    }
+  // Función para mostrar notificaciones
+  const showNotification = (type, title, message) => {
+    setNotification({
+      isOpen: true,
+      type,
+      title,
+      message
+    });
+  };
+
+  const closeNotification = () => {
+    setNotification(prev => ({ ...prev, isOpen: false }));
+  };
+
+  // Modal de confirmación personalizado para eliminar
+  const [deleteConfirmation, setDeleteConfirmation] = useState({
+    isOpen: false,
+    estimate: null
+  });
+
+  const showDeleteConfirmation = (estimate) => {
+    setDeleteConfirmation({
+      isOpen: true,
+      estimate
+    });
+  };
+
+  const hideDeleteConfirmation = () => {
+    setDeleteConfirmation({
+      isOpen: false,
+      estimate: null
+    });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirmation.estimate) return;
 
     try {
-      await axios.delete(`${API_BASE_URL}/estimates/${estimateId}`);
+      await axios.delete(`${API_BASE_URL}/estimates/${deleteConfirmation.estimate.id}`);
       await fetchEstimates();
       await fetchStats();
       setSelectedEstimate(null);
+      hideDeleteConfirmation();
+      
+      showNotification(
+        'success',
+        '🗑️ Estimación Eliminada',
+        `La estimación "${deleteConfirmation.estimate.project_name}" ha sido eliminada exitosamente de la base de datos.`
+      );
     } catch (error) {
       console.error('Error deleting estimate:', error);
-      alert('Error al eliminar la estimación');
+      hideDeleteConfirmation();
+      showNotification(
+        'error',
+        '❌ Error al Eliminar',
+        'Hubo un problema al eliminar la estimación. Por favor, inténtalo de nuevo.'
+      );
     }
   };
 
@@ -82,6 +141,81 @@ const AdminDashboard = ({ onLogout }) => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Notification Modal */}
+      <NotificationModal
+        isOpen={notification.isOpen}
+        onClose={closeNotification}
+        type={notification.type}
+        title={notification.title}
+        message={notification.message}
+        autoClose={notification.type === 'success'}
+        autoCloseDelay={3500}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {deleteConfirmation.isOpen && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              className="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm"
+              onClick={hideDeleteConfirmation}
+            />
+            
+            <motion.div
+              className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden border-2 border-red-200"
+              initial={{ scale: 0.7, opacity: 0, y: 50 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.7, opacity: 0, y: 50 }}
+            >
+              <div className="bg-gradient-to-r from-red-500 to-red-600 p-6 text-white">
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
+                    <span className="text-3xl">🗑️</span>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold">Confirmar Eliminación</h3>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6">
+                <p className="text-gray-700 text-lg mb-2">
+                  ¿Estás seguro de que quieres eliminar la estimación:
+                </p>
+                <p className="font-bold text-gray-900 mb-6">
+                  "{deleteConfirmation.estimate?.project_name}"?
+                </p>
+                <p className="text-sm text-gray-600 mb-6">
+                  Esta acción no se puede deshacer.
+                </p>
+
+                <div className="flex gap-3 justify-end">
+                  <button
+                    onClick={hideDeleteConfirmation}
+                    className="px-6 py-3 bg-gray-500 text-white rounded-lg font-semibold hover:bg-gray-600 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <motion.button
+                    onClick={confirmDelete}
+                    className="px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    Eliminar
+                  </motion.button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Header */}
       <header className="bg-white shadow-lg border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-6 py-4">
@@ -95,12 +229,28 @@ const AdminDashboard = ({ onLogout }) => {
                 <p className="text-sm text-gray-600">Gestión de Estimaciones de Proyectos</p>
               </div>
             </div>
-            <button
-              onClick={onLogout}
-              className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors"
-            >
-              Cerrar Sesión
-            </button>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => {
+                  fetchEstimates();
+                  fetchStats();
+                  showNotification(
+                    'info',
+                    '🔄 Datos Actualizados',
+                    'Los datos han sido recargados desde la base de datos.'
+                  );
+                }}
+                className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
+              >
+                🔄 Actualizar
+              </button>
+              <button
+                onClick={onLogout}
+                className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors"
+              >
+                Cerrar Sesión
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -213,13 +363,6 @@ const AdminDashboard = ({ onLogout }) => {
               <option value="cost">Mayor costo</option>
               <option value="hours">Más horas</option>
             </select>
-
-            <button
-              onClick={fetchEstimates}
-              className="bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              🔄 Actualizar
-            </button>
           </div>
         </div>
 
@@ -334,7 +477,7 @@ const AdminDashboard = ({ onLogout }) => {
                           Ver
                         </button>
                         <button
-                          onClick={() => deleteEstimate(estimate.id)}
+                          onClick={() => showDeleteConfirmation(estimate)}
                           className="bg-red-100 text-red-700 px-3 py-1 rounded-lg hover:bg-red-200 transition-colors"
                         >
                           Eliminar
@@ -349,7 +492,7 @@ const AdminDashboard = ({ onLogout }) => {
         </motion.div>
       </div>
 
-      {/* Modal de Detalle */}
+      {/* Modal de Detalle (mantenido igual que antes) */}
       <AnimatePresence>
         {selectedEstimate && (
           <motion.div
